@@ -1,0 +1,4 @@
+*.pdf
+gemini_env/
+__pycache__/
+.env
