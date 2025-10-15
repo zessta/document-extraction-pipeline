@@ -1,7 +1,7 @@
 from pydantic import BaseModel
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 class ExtractRequest(BaseModel):
     pdf_path: str
-    schema: Dict[str, Any]
-    total_schema:Dict[str, Any]
+    schema: Optional[Dict[str, Any]] = None
+    total_schema: Optional[Dict[str, Any]] = None
