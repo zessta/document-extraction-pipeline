@@ -6,6 +6,7 @@ from fastapi.responses import JSONResponse
 from models import ExtractRequest
 from field_extractor_gemini import extract_from_pdf_direct
 import google.generativeai as genai
+from dotenv import load_dotenv  # added
 
 # ---------------------------------------------------------
 # Logging Configuration
@@ -19,8 +20,8 @@ logger = logging.getLogger("pdf_extractor")
 # ---------------------------------------------------------
 # Gemini API Initialization (from environment)
 # ---------------------------------------------------------
-# GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-GEMINI_API_KEY = "AIzaSyCvCV7mOVOJo5ViN4unPvRJddfDVDUanTA"
+load_dotenv()  # added
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")  # changed to env
 if not GEMINI_API_KEY:
     raise ValueError("GEMINI_API_KEY environment variable not set. Please set it before running the app.")
 genai.configure(api_key=GEMINI_API_KEY)
@@ -35,188 +36,175 @@ app = FastAPI(
 )
 
 # ---------------------------------------------------------
-# Strict JSON Schema (matches requested format)
+# Strict JSON Schema (updated to Grouped Hospital Bill Claim Schema)
 # ---------------------------------------------------------
 STRICT_OUTPUT_SCHEMA = {
     "$schema": "http://json-schema.org/draft-07/schema#",
-    "title": "Hospital Bill Extraction Schema",
+    "title": "Grouped Hospital Bill Claim Schema",
+    "description": "A schema for extracting fields from hospital bills, with billing information grouped by category and subcategory.",
     "type": "object",
     "definitions": {
         "line_item": {
             "type": "object",
             "properties": {
                 "service_code": {"type": "string"},
-                "description_of_service": {"type": "string"},
+                "description": {"type": "string"},
                 "date": {"type": "string"},
-                "qty": {"type": "number"},
-                "gross_amount": {"type": "number"},
-                "discount": {"type": "number"},
-                "allocated_amount": {"type": "number"}
+                "quantity": {"type": "string"},
+                "gross_amount": {"type": "string"},
+                "discount": {"type": "string"},
+                "allocated_amount": {"type": "string"}
             },
             "required": [
                 "service_code",
-                "description_of_service",
+                "description",
                 "date",
-                "qty",
+                "quantity",
                 "gross_amount",
                 "discount",
                 "allocated_amount"
-            ],
-            "additionalProperties": False
+            ]
         }
     },
     "properties": {
-        "FORMAT": {"type": "string"},
-        "BILL_NO": {"type": "string"},
-        "PATIENT_NAME": {"type": "string"},
-        "IC_PASSPORT_NO": {"type": "string"},
-        "VISIT_TYPE": {"type": "string"},
-        "ADMISSION_DATE_TIME": {"type": "string"},
-        "DISCHARGE_DATE_TIME": {"type": "string"},
-        "GL_REFERENCE_NO": {"type": "string"},
-        "BILLING_CATEGORY": {
-            "type": "array",
-            "items": {"$ref": "#/definitions/line_item"}
-        },
-        "BILLING_SUBCATEGORY_DETAILS": {
+        "document_details": {
             "type": "object",
             "properties": {
-                "ACCOMMODATION": {"type": "array", "items": {"$ref": "#/definitions/line_item"}},
-                "MEDICAL_RECORD_SERVICES": {"type": "array", "items": {"$ref": "#/definitions/line_item"}},
-                "HOSPITAL_SUPPORT_FEES": {"type": "array", "items": {"$ref": "#/definitions/line_item"}},
-                "GENERAL_SUPPLIES": {"type": "array", "items": {"$ref": "#/definitions/line_item"}},
-                "RADIOGRAPHY_SUPPLIES": {"type": "array", "items": {"$ref": "#/definitions/line_item"}},
-                "SURGICAL_SUPPLIES": {"type": "array", "items": {"$ref": "#/definitions/line_item"}},
-                "DRUGS_FORMULARY": {"type": "array", "items": {"$ref": "#/definitions/line_item"}},
-                "MEDICAL_SUPPLIES": {"type": "array", "items": {"$ref": "#/definitions/line_item"}},
-                "LABORATORY": {"type": "array", "items": {"$ref": "#/definitions/line_item"}},
-                "DIAGNOSTIC_SERVICES": {"type": "array", "items": {"$ref": "#/definitions/line_item"}},
-                "NURSING_SERVICES": {"type": "array", "items": {"$ref": "#/definitions/line_item"}},
-                "EMERGENCY_MEDICAL_SERVICE": {"type": "array", "items": {"$ref": "#/definitions/line_item"}},
-                "EQUIPMENT_USAGE": {"type": "array", "items": {"$ref": "#/definitions/line_item"}},
-                "MEDICAL_GASES": {"type": "array", "items": {"$ref": "#/definitions/line_item"}},
-                "OPERATING_ROOM_FEE": {"type": "array", "items": {"$ref": "#/definitions/line_item"}},
-                "OPERATING_THEATER_FEES": {"type": "array", "items": {"$ref": "#/definitions/line_item"}},
-                "OT_SUPPORT": {"type": "array", "items": {"$ref": "#/definitions/line_item"}},
-                "OT_SERVICES": {"type": "array", "items": {"$ref": "#/definitions/line_item"}},
-                "OT_SUPPLIES_CONSUMABLES": {"type": "array", "items": {"$ref": "#/definitions/line_item"}},
-                "PACKAGE": {"type": "array", "items": {"$ref": "#/definitions/line_item"}},
-                "PPE_SUPPLIES": {"type": "array", "items": {"$ref": "#/definitions/line_item"}},
-                "PROCEDURES": {"type": "array", "items": {"$ref": "#/definitions/line_item"}},
-                "STERILE_ITEMS_AND_SETS": {"type": "array", "items": {"$ref": "#/definitions/line_item"}},
-                "PROCEDURE_FEES": {"type": "array", "items": {"$ref": "#/definitions/line_item"}},
-                "CONSULTATION_FEES": {"type": "array", "items": {"$ref": "#/definitions/line_item"}},
-                "REPORTING_FEES": {"type": "array", "items": {"$ref": "#/definitions/line_item"}}
+                "format": {"type": "string"},
+                "bill_no": {"type": "string"},
+                "provider_name": {"type": "string"}
             },
+            "required": ["format", "bill_no", "provider_name"]
+        },
+        "patient_information": {
+            "type": "object",
+            "properties": {
+                "full_name": {"type": "string"},
+                "identification_number": {"type": "string"},
+                "policy_no": {"type": "string"}
+            },
+            "required": ["full_name", "identification_number", "policy_no"]
+        },
+        "claim_details": {
+            "type": "object",
+            "properties": {
+                "visit_type": {"type": "string"},
+                "admission_date_time": {"type": "string"},
+                "discharge_date_time": {"type": "string"},
+                "physician_name": {"type": "string"},
+                "gl_reference_no": {"type": "string"}
+            },
+            "required": [
+                "visit_type",
+                "admission_date_time",
+                "discharge_date_time",
+                "physician_name",
+                "gl_reference_no"
+            ]
+        },
+        "billing_details": {
+            "type": "object",
+            "description": "A nested object where keys are the main categories, and their values are objects where keys are subcategories containing an array of line items.",
             "additionalProperties": {
-                "type": "array",
-                "items": {"$ref": "#/definitions/line_item"}
+                "type": "object",
+                "additionalProperties": {
+                    "type": "array",
+                    "items": {"$ref": "#/definitions/line_item"}
+                }
             }
         },
-        "TOTAL_ROOM_CHARGES": {"type": "number"},
-        "TOTAL_HOSPITAL_MEDICAL_SERVICES": {"type": "number"},
-        "TOTAL_HOSPITAL_CHARGES": {"type": "number"},
-        "TOTAL_CONSULTANT_FEES": {"type": "number"},
-        "GRAND_TOTAL": {"type": "number"}
+        "financial_information": {
+            "type": "object",
+            "properties": {
+                "total_room_charges": {"type": "string"},
+                "total_hospital_medical_services": {"type": "string"},
+                "total_hospital_charges": {"type": "string"},
+                "total_consultant_fees": {"type": "string"},
+                "grand_total": {"type": "string"}
+            },
+            "required": [
+                "total_room_charges",
+                "total_hospital_medical_services",
+                "total_hospital_charges",
+                "total_consultant_fees",
+                "grand_total"
+            ]
+        }
     },
     "required": [
-        "FORMAT",
-        "BILL_NO",
-        "PATIENT_NAME",
-        "IC_PASSPORT_NO",
-        "VISIT_TYPE",
-        "ADMISSION_DATE_TIME",
-        "DISCHARGE_DATE_TIME",
-        "GL_REFERENCE_NO",
-        "BILLING_CATEGORY",
-        "BILLING_SUBCATEGORY_DETAILS",
-        "TOTAL_ROOM_CHARGES",
-        "TOTAL_HOSPITAL_MEDICAL_SERVICES",
-        "TOTAL_HOSPITAL_CHARGES",
-        "TOTAL_CONSULTANT_FEES",
-        "GRAND_TOTAL"
-    ],
-    "additionalProperties": False
+        "document_details",
+        "patient_information",
+        "claim_details",
+        "billing_details",
+        "financial_information"
+    ]
 }
 
 # ---------------------------------------------------------
-# Extraction Prompt (matches requested format)
+# Extraction Prompt (strict, flat grouped output with all sub-categories)
 # ---------------------------------------------------------
 EXTRACTION_PROMPT = """
-Read the attached medical bill PDF and extract detailed information for all possible billing subcategories, including but not limited to:
+You are an intelligent data extraction assistant specializing in medical documents. Your task is to accurately extract all relevant information from the provided hospital bill text and format it into a single JSON object.
 
-ACCOMMODATION, MEDICAL RECORD SERVICES, HOSPITAL SUPPORT FEES, GENERAL SUPPLIES, RADIOGRAPHY SUPPLIES, SURGICAL SUPPLIES, DRUGS FORMULARY, MEDICAL SUPPLIES, LABORATORY, DIAGNOSTIC SERVICES, NURSING SERVICES, EMERGENCY MEDICAL SERVICE, EQUIPMENT USAGE, MEDICAL GASES, OPERATING ROOM FEE, OPERATING THEATER FEES, OT-SUPPORT, OT SERVICES, OT SUPPLIES & CONSUMABLES, PACKAGE, PPE SUPPLIES, PROCEDURES, STERILE ITEMS AND SETS, PROCEDURE FEES, CONSULTATION FEES, REPORTING FEES.
+Please adhere strictly to the following instructions:
 
-For each line item within these subcategories, extract:
-
-    Service Code (string, or "")
-    Description of Service (string, or "")
-    Date (string, or "")
-    Quantity (number, or 0)
-    Gross Amount (number, or 0)
-    Discount (number, or 0)
-    Allocated Amount (number, or 0)
-
-Return a structured JSON with this format:
+Follow the Schema: The final output must match the JSON structure provided below.
+Categorize Correctly: Place each line item into its correct category (room_charges, hospital_medical_services, or consultation_fees) and sub-category (e.g., DRUGS FORMULARY, PROCEDURE FEES).
+Include All Sub-categories: You must include every sub-category key listed in the schema. If no line items fall into a specific sub-category, represent it with an empty array []. Do not omit any keys.
+Extract All Fields: For each line item, extract all details: service_code, description, date, quantity, gross_amount, discount, allocated_amount.
+Maintain Data Type: All extracted values must be strings in the JSON.
 
 {
-  "FORMAT": "",
-  "BILL_NO": "",
-  "PATIENT_NAME": "",
-  "IC_PASSPORT_NO": "",
-  "VISIT_TYPE": "",
-  "ADMISSION_DATE_TIME": "",
-  "DISCHARGE_DATE_TIME": "",
-  "GL_REFERENCE_NO": "",
-  "BILLING_CATEGORY": [
-    {
-      "service_code": "",
-      "description_of_service": "",
-      "date": "",
-      "qty": 0,
-      "gross_amount": 0,
-      "discount": 0,
-      "allocated_amount": 0
-    }
-  ],
-  "BILLING_SUBCATEGORY_DETAILS": {
-    "ACCOMMODATION": [],
-    "MEDICAL_RECORD_SERVICES": [],
-    "HOSPITAL_SUPPORT_FEES": [],
-    "GENERAL_SUPPLIES": [],
-    "RADIOGRAPHY_SUPPLIES": [],
-    "SURGICAL_SUPPLIES": [],
-    "DRUGS_FORMULARY": [],
-    "MEDICAL_SUPPLIES": [],
-    "LABORATORY": [],
-    "DIAGNOSTIC_SERVICES": [],
-    "NURSING_SERVICES": [],
-    "EMERGENCY_MEDICAL_SERVICE": [],
-    "EQUIPMENT_USAGE": [],
-    "MEDICAL_GASES": [],
-    "OPERATING_ROOM_FEE": [],
-    "OPERATING_THEATER_FEES": [],
-    "OT_SUPPORT": [],
-    "OT_SERVICES": [],
-    "OT_SUPPLIES_CONSUMABLES": [],
-    "PACKAGE": [],
-    "PPE_SUPPLIES": [],
-    "PROCEDURES": [],
-    "STERILE_ITEMS_AND_SETS": [],
-    "PROCEDURE_FEES": [],
-    "CONSULTATION_FEES": [],
-    "REPORTING_FEES": []
+  "format": "",
+  "bill_no": "",
+  "provider_name": "",
+  "patient_name": "",
+  "ic/passport_no": "",
+  "visit_type": "",
+  "admission_date_time": "",
+  "discharge_date_time": "",
+  "gl_reference_no": "",
+  "room_charges": {
+    "ACCOMMODATION": []
   },
-  "TOTAL_ROOM_CHARGES": 0,
-  "TOTAL_HOSPITAL_MEDICAL_SERVICES": 0,
-  "TOTAL_HOSPITAL_CHARGES": 0,
-  "TOTAL_CONSULTANT_FEES": 0,
-  "GRAND_TOTAL": 0
+  "hospital_medical_services": {
+    "DIAGNOSTIC SERVICES": [],
+    "DRUGS FORMULARY": [],
+    "EMERGENCY MEDICAL SERVICE": [],
+    "EQUIPMENT USAGE": [],
+    "GENERAL SUPPLIES": [],
+    "HOSPITAL SUPPORT FEES": [],
+    "LABORATORY": [],
+    "MEDICAL GASES": [],
+    "MEDICAL RECORD SERVICES": [],
+    "MEDICAL SUPPLIES": [],
+    "NURSING SERVICES": [],
+    "OPERATING ROOM FEE": [],
+    "OPERATING THEATER FEES": [],
+    "OT SERVICES": [],
+    "OT SUPPLIES & CONSUMABLES": [],
+    "OT-SUPPORT": [],
+    "PACKAGE": [],
+    "PPE SUPPLIES": [],
+    "PROCEDURES": [],
+    "RADIOGRAPHY SUPPLIES": [],
+    "STERILE ITEMS AND SETS": [],
+    "SURGICAL SUPPLIES": []
+  },
+  "consultation_fees": {
+    "CONSULTATION FEES": [],
+    "PROCEDURE FEES": [],
+    "REPORTING FEES": []
+  },
+  "total_room_charges": "",
+  "total_hospital_medical_services": "",
+  "total_consultant_fees": "",
+  "grand_total": ""
 }
 
 Rules:
-- For any redacted fields, leave the value as an empty string ("").
-- Output ONLY the JSON. Do not include explanations or commentary.
+- Output ONLY the JSON object. No explanations or markdown.
+- Include all sub-category keys exactly as shown, even if empty.
 """
 
 # ---------------------------------------------------------
@@ -251,7 +239,7 @@ def extract(request: ExtractRequest):
             request.pdf_path,
             schema_to_use,
             request.total_schema,
-            prompt=EXTRACTION_PROMPT
+            prompt=EXTRACTION_PROMPT  # enforce strict prompt for grouped output
         )
         return {"status": "success", "data": result}
     except Exception as e:

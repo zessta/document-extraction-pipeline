@@ -13,64 +13,69 @@ logger = logging.getLogger("eval_converted")
 # Configuration
 ROOT_DIR = r"c:\\Users\\Ram\\Desktop\\workspace\\document-extraction-pipeline"
 INPUT_FOLDERS = ["250625-set-b-clean", "250625-set-b-defect"]
-BASE_GROUND_TRUTH_DIR = os.path.join(ROOT_DIR, "ground_truth_converted")
+BASE_GROUND_TRUTH_DIR = os.path.join(ROOT_DIR, "ground_truth")  # CHANGED: use ground_truth
 EXTRACT_URL = "http://localhost:8000/extract"
 
 # Schema to send to the API (response shape)
 SCHEMA: Dict[str, Any] = {
-    "FORMAT": "",
-    "BILL_NO": "",
-    "PATIENT_NAME": "",
-    "IC_PASSPORT_NO": "",
-    "VISIT_TYPE": "",
-    "ADMISSION_DATE_TIME": "",
-    "DISCHARGE_DATE_TIME": "",
-    "GL_REFERENCE_NO": "",
-    "BILLING_CATEGORY": [
-        {
-            "service_code": "",
-            "description_of_service": "",
-            "date": "",
-            "qty": 0,
-            "gross_amount": 0,
-            "discount": 0,
-            "allocated_amount": 0
-        }
-    ],
-    "BILLING_SUBCATEGORY_DETAILS": {
-        "ACCOMMODATION": [],
-        "MEDICAL_RECORD_SERVICES": [],
-        "HOSPITAL_SUPPORT_FEES": [],
-        "GENERAL_SUPPLIES": [],
-        "RADIOGRAPHY_SUPPLIES": [],
-        "SURGICAL_SUPPLIES": [],
-        "DRUGS_FORMULARY": [],
-        "MEDICAL_SUPPLIES": [],
-        "LABORATORY": [],
-        "DIAGNOSTIC_SERVICES": [],
-        "NURSING_SERVICES": [],
-        "EMERGENCY_MEDICAL_SERVICE": [],
-        "EQUIPMENT_USAGE": [],
-        "MEDICAL_GASES": [],
-        "OPERATING_ROOM_FEE": [],
-        "OPERATING_THEATER_FEES": [],
-        "OT_SUPPORT": [],
-        "OT_SERVICES": [],
-        "OT_SUPPLIES_CONSUMABLES": [],
-        "PACKAGE": [],
-        "PPE_SUPPLIES": [],
-        "PROCEDURES": [],
-        "STERILE_ITEMS_AND_SETS": [],
-        "PROCEDURE_FEES": [],
-        "CONSULTATION_FEES": [],
-        "REPORTING_FEES": []
+    "format": "",
+    "bill_no": "",
+    "provider_name": "",
+    "patient_name": "",
+    "ic/passport_no": "",
+    "visit_type": "",
+    "admission_date_time": "",
+    "discharge_date_time": "",
+    "gl_reference_no": "",
+    "room_charges": {
+        "ACCOMMODATION": [
+            { "service_code": "", "description": "", "date": "", "quantity": "", "gross_amount": "", "discount": "", "allocated_amount": "" }
+        ]
     },
-    "TOTAL_ROOM_CHARGES": 0,
-    "TOTAL_HOSPITAL_MEDICAL_SERVICES": 0,
-    "TOTAL_HOSPITAL_CHARGES": 0,
-    "TOTAL_CONSULTANT_FEES": 0,
-    "GRAND_TOTAL": 0
+    "hospital_medical_services": {
+        "DIAGNOSTIC SERVICES": [],
+        "DRUGS FORMULARY": [],
+        "EMERGENCY MEDICAL SERVICE": [],
+        "EQUIPMENT USAGE": [],
+        "GENERAL SUPPLIES": [],
+        "HOSPITAL SUPPORT FEES": [],
+        "LABORATORY": [],
+        "MEDICAL GASES": [],
+        "MEDICAL RECORD SERVICES": [],
+        "MEDICAL SUPPLIES": [],
+        "NURSING SERVICES": [],
+        "OPERATING ROOM FEE": [],
+        "OPERATING THEATER FEES": [],
+        "OT SERVICES": [],
+        "OT SUPPLIES & CONSUMABLES": [],
+        "OT-SUPPORT": [],
+        "PACKAGE": [],
+        "PPE SUPPLIES": [],
+        "PROCEDURES": [],
+        "RADIOGRAPHY SUPPLIES": [],
+        "STERILE ITEMS AND SETS": [],
+        "SURGICAL SUPPLIES": []
+    },
+    "consultation_fees": {
+        "CONSULTATION FEES": [],
+        "PROCEDURE FEES": [],
+        "REPORTING FEES": []
+    },
+    "total_room_charges": "",
+    "total_hospital_medical_services": "",
+    "total_consultant_fees": "",
+    "grand_total": ""
 }
+
+# Whitelist of hospital subcategories (to align GT with response schema)
+HOSPITAL_SUBCATS = [
+    "DIAGNOSTIC SERVICES","DRUGS FORMULARY","EMERGENCY MEDICAL SERVICE","EQUIPMENT USAGE",
+    "GENERAL SUPPLIES","HOSPITAL SUPPORT FEES","LABORATORY","MEDICAL GASES","MEDICAL RECORD SERVICES",
+    "MEDICAL SUPPLIES","NURSING SERVICES","OPERATING ROOM FEE","OPERATING THEATER FEES","OT SERVICES",
+    "OT SUPPLIES & CONSUMABLES","OT-SUPPORT","PACKAGE","PPE SUPPLIES","PROCEDURES","RADIOGRAPHY SUPPLIES",
+    "STERILE ITEMS AND SETS","SURGICAL SUPPLIES"
+]
+CONSULT_SUBCATS = ["CONSULTATION FEES","PROCEDURE FEES","REPORTING FEES"]
 
 def post_extract(pdf_path: str) -> Dict[str, Any]:
     payload = {"pdf_path": pdf_path, "schema": SCHEMA}
@@ -96,18 +101,28 @@ def resolve_base_truth(basename: str) -> str:
     path = os.path.join(BASE_GROUND_TRUTH_DIR, f"{basename}.json")
     return path if os.path.exists(path) else ""
 
-def is_number(x: Any) -> bool:
+def _try_parse_number(x: Any) -> Tuple[bool, float]:
+    if x is None:
+        return False, 0.0
+    s = str(x).strip()
+    neg = s.startswith("(") and s.endswith(")")
+    s = s.strip("()").replace(",", "")
     try:
-        float(x)
-        return True
+        v = float(s)
+        return True, -v if neg else v
     except Exception:
-        return False
+        return False, 0.0
+
+def is_number(x: Any) -> bool:
+    ok, _ = _try_parse_number(x)
+    return ok
 
 def num_equal(a: Any, b: Any, tol: float = 0.01) -> bool:
-    try:
-        return math.isclose(float(a), float(b), abs_tol=tol)
-    except Exception:
+    ok_a, va = _try_parse_number(a)
+    ok_b, vb = _try_parse_number(b)
+    if not (ok_a and ok_b):
         return False
+    return math.isclose(va, vb, abs_tol=tol)
 
 def normalize_str(s: Any) -> str:
     if s is None:
@@ -120,8 +135,8 @@ def scalar_equal(gt: Any, pred: Any) -> bool:
     # If base is empty string, do not penalize any predicted value (consider correct).
     if isinstance(gt, str) and normalize_str(gt) == "":
         return True
-    # Numbers
-    if (isinstance(gt, (int, float)) or is_number(gt)) and (isinstance(pred, (int, float)) or is_number(pred)):
+    # Numbers (with commas/parentheses support)
+    if (is_number(gt)) and (is_number(pred)):
         return num_equal(gt, pred)
     # Strings
     return normalize_str(gt) == normalize_str(pred)
@@ -272,6 +287,89 @@ def compare_json(gt: Any, pred: Any, path: str = "") -> Tuple[int, int, List[str
     else:
         return 0, 1, [path], []
 
+def _get_ci(d: Dict[str, Any], key: str) -> Any:
+    """Case-insensitive get for dict keys."""
+    if not isinstance(d, dict):
+        return None
+    for k, v in d.items():
+        if str(k).strip().lower() == key.strip().lower():
+            return v
+    return None
+
+def _ensure_line_items(items: Any) -> List[Dict[str, Any]]:
+    out: List[Dict[str, Any]] = []
+    if not isinstance(items, list):
+        return out
+    for li in items:
+        if not isinstance(li, dict):
+            continue
+        out.append({
+            "service_code": str(li.get("service_code", "")),
+            "description": str(li.get("description", "")),
+            "date": str(li.get("date", "")),
+            "quantity": str(li.get("quantity", "")),
+            "gross_amount": str(li.get("gross_amount", "")),
+            "discount": str(li.get("discount", "")),
+            "allocated_amount": str(li.get("allocated_amount", "")),
+        })
+    return out
+
+def normalize_ground_truth_to_response(gt: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Map GT schema:
+      document_details/patient_information/claim_details/billing_details/financial_information
+    to response schema used by the API:
+      format, bill_no, provider_name, patient_name, ic/passport_no, ..., room_charges, hospital_medical_services, consultation_fees
+    """
+    doc = gt.get("document_details", {}) or {}
+    pat = gt.get("patient_information", {}) or {}
+    clm = gt.get("claim_details", {}) or {}
+    bill = gt.get("billing_details", {}) or {}
+    # Financial totals intentionally ignored here to match sample response shape
+
+    # Room charges (only ACCOMMODATION subcat)
+    room_src = _get_ci(bill, "ROOM CHARGES") or {}
+    room_out: Dict[str, List[Dict[str, Any]]] = {"ACCOMMODATION": []}
+    if isinstance(room_src, dict):
+        acc = _get_ci(room_src, "ACCOMMODATION")
+        room_out["ACCOMMODATION"] = _ensure_line_items(acc)
+
+    # Hospital medical services - include all whitelisted subcategories (empty if missing)
+    hms_src = _get_ci(bill, "HOSPITAL MEDICAL SERVICES") or {}
+    hms_out: Dict[str, List[Dict[str, Any]]] = {}
+    if isinstance(hms_src, dict):
+        for sub in HOSPITAL_SUBCATS:
+            hms_out[sub] = _ensure_line_items(_get_ci(hms_src, sub))
+    else:
+        for sub in HOSPITAL_SUBCATS:
+            hms_out[sub] = []
+
+    # Consultation fees - flatten across consultants by subcategory
+    consult_src = _get_ci(bill, "CONSULTANT(S) FEES") or {}
+    consult_out: Dict[str, List[Dict[str, Any]]] = {k: [] for k in CONSULT_SUBCATS}
+    if isinstance(consult_src, dict):
+        for _consultant, buckets in consult_src.items():
+            if not isinstance(buckets, dict):
+                continue
+            for sub in CONSULT_SUBCATS:
+                consult_out[sub].extend(_ensure_line_items(_get_ci(buckets, sub)))
+
+    normalized = {
+        "format": str(doc.get("format", "")),
+        "bill_no": str(doc.get("bill_no", "")),
+        "provider_name": str(doc.get("provider_name", "")),
+        "patient_name": str(pat.get("full_name", "")),
+        "ic/passport_no": str(pat.get("identification_number", "")),
+        "visit_type": str(clm.get("visit_type", "")),
+        "admission_date_time": str(clm.get("admission_date_time", "")),
+        "discharge_date_time": str(clm.get("discharge_date_time", "")),
+        "gl_reference_no": str(clm.get("gl_reference_no", "")),
+        "room_charges": room_out,
+        "hospital_medical_services": hms_out,
+        "consultation_fees": consult_out
+    }
+    return normalized
+
 def evaluate_one(pdf_path: str, base_json_path: str) -> Dict[str, Any]:
     try:
         prediction = post_extract(pdf_path)
@@ -299,7 +397,8 @@ def evaluate_one(pdf_path: str, base_json_path: str) -> Dict[str, Any]:
             "mismatched_fields": ""
         }
 
-    gt = get_base_data(base_obj)
+    gt_raw = get_base_data(base_obj)
+    gt = normalize_ground_truth_to_response(gt_raw)  # CHANGED: normalize GT shape
     pred = prediction if isinstance(prediction, dict) else {}
 
     correct, total, mismatches, missing = compare_json(gt, pred)
@@ -360,7 +459,7 @@ def evaluate_folder(folder_name: str) -> Tuple[str, float, float, float, int]:
         fname = os.path.splitext(os.path.basename(pdf))[0]
         base_path = resolve_base_truth(fname)
         if not base_path:
-            logger.warning(f"Base ground truth (converted) missing for {fname}")
+            logger.warning(f"Base ground truth missing for {fname}")
             continue
 
         logger.info(f"[{folder_name}] {fname}.pdf")
