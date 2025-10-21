@@ -192,7 +192,7 @@ def extract_from_pdf_direct(pdf_path: str, schema: dict, total_schema: dict = No
             logger.error(f"Failed to repair JSON: {repair_error}")
             raise HTTPException(status_code=500, detail="Gemini did not return valid JSON")
 
-    # Enforce required subcategory keys and all-string leaf values
+    # Enforce required subcategory keys, then stringify all values
     data = _normalize_output(data)
     data = _stringify_values(data)
     return clean_newlines(data)

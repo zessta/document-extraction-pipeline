@@ -6,3 +6,8 @@ ground_truth/*.json
 ground_truth_converted/*.json
 250625-set-b-clean/
 250625-set-b-defect/
+output/
+mistral_output/
+gpt-5-mini-responses/
+gemini_clean/*.json
+gemini_defect/*.json

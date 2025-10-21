@@ -69,7 +69,7 @@ Before running this service, ensure you have:
 ## ▶️ Running the FastAPI App
 
 ```bash
-uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+uvicorn app:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 Once started, the API will be available at:

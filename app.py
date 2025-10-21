@@ -1,10 +1,11 @@
 from field_extractor_gpt import extract_from_pdf_openai
 import os
 import logging
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
 from models import ExtractRequest
 from field_extractor_gemini import extract_from_pdf_direct
+from field_extractor_mistral import extract_from_pdf_mistral  # SDK-based
 import google.generativeai as genai
 from dotenv import load_dotenv  # added
 
@@ -21,7 +22,8 @@ logger = logging.getLogger("pdf_extractor")
 # Gemini API Initialization (from environment)
 # ---------------------------------------------------------
 load_dotenv()  # added
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")  # changed to env
+# GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")  # changed to env
+GEMINI_API_KEY = "AIzaSyCvCV7mOVOJo5ViN4unPvRJddfDVDUanTA"
 if not GEMINI_API_KEY:
     raise ValueError("GEMINI_API_KEY environment variable not set. Please set it before running the app.")
 genai.configure(api_key=GEMINI_API_KEY)
@@ -283,3 +285,40 @@ def extract_openai_gpt5_nano(request: ExtractRequest):
     except Exception as e:
         logger.error(f"OpenAI GPT-5 nano extraction failed: {e}")
         return JSONResponse(status_code=500, content={"status": "error", "message": str(e)})
+
+# ---------------------------------------------------------
+# PDF Extraction Endpoint (Mistral)
+# ---------------------------------------------------------
+@app.post("/extract-mistral", tags=["PDF Extraction"])
+def extract_data_mistral(request: ExtractRequest):
+    """
+    Extract data from PDF using Mistral API.
+    Similar to /extract endpoint but uses Mistral instead of Gemini.
+    """
+    try:
+        if not os.path.exists(request.pdf_path):
+            raise HTTPException(status_code=400, detail=f"PDF file not found: {request.pdf_path}")
+        
+        logger.info(f"Processing PDF with Mistral: {request.pdf_path}")
+        
+        data = extract_from_pdf_mistral(
+            pdf_path=request.pdf_path,
+            schema=request.schema,
+            total_schema=getattr(request, "total_schema", None),
+            prompt=getattr(request, "prompt", None),
+            model=getattr(request, "model", "mistral-small-latest"),
+        )
+        
+        logger.info(f"Successfully extracted data using Mistral for: {request.pdf_path}")
+        
+        return {
+            "status": "success",
+            "data": data,
+            "message": "Data extracted successfully using Mistral API"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error during Mistral extraction: {e}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")

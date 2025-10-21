@@ -5,7 +5,7 @@ from fastapi import HTTPException
 import pdfplumber
 import openai
 
-OPENAI_API = os.getenv("OPENAI_API_KEY")
+OPENAI_API = 'test_key' #os.getenv("OPENAI_API_KEY")
 if not OPENAI_API:
     raise HTTPException(status_code=500, detail="OPENAI_API_KEY environment variable not set.")
 openai.api_key = OPENAI_API

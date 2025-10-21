@@ -3,7 +3,7 @@ import json
 import re
 from typing import Any, Dict, List
 
-BASE_DIR = r"c:\\Users\\Ram\\Desktop\\workspace\\document-extraction-pipeline"
+BASE_DIR = r"c:\Users\Ram\Desktop\workspace\document-extraction-pipeline"
 INPUT_DIR = os.path.join(BASE_DIR, "ground_truth")
 OUTPUT_DIR = os.path.join(BASE_DIR, "ground_truth_converted")
 
@@ -122,7 +122,7 @@ def convert_file(src_path: str) -> Dict[str, Any]:
 
 def main():
     os.makedirs(OUTPUT_DIR, exist_ok=True)
-    files = [f for f in os.listdir(INPUT_DIR) if f.lower().endswith(".json")]
+    files = ['MH24115623_Redacted.json', 'MH24117602_Redacted.json', 'MH24117703_Redacted.json', 'MH24118287_Redacted.json','MH24122389_Redacted.json', 'MH24123043_Redacted.json', 'MH24130614_Redacted.json', 'MH24165132_Redacted.json', 'MH24167245_Redacted.json', 'MH24174464_Redacted.json', 'MH24177601_Redacted.json', 'MH24183748_Redacted.json', 'MH24197851_Redacted.json', '']
     for fname in files:
         src = os.path.join(INPUT_DIR, fname)
         try:
