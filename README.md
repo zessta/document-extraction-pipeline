@@ -191,3 +191,9 @@ curl -X POST "http://localhost:8000/extract" \
 ```
 
 ---
+
+OPENAI Extractor 
+
+This is the file micare_openai.py 
+Run it using python micare_openai.py <file_name> --model <model_name (etc gpt-5-mini)>
+
