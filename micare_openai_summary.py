@@ -1,5 +1,4 @@
-#Run this as python micare_openai_summary.py <file_name> --model <model_name (etc gpt-5-mini)>
-#Export the openai api key to OPENAI_API_KEY
+#Run this as python micare_openai.py <file_name> --model <model_name (etc gpt-5-mini)>
 
 import os
 import json
@@ -166,6 +165,8 @@ You are an intelligent data extraction assistant specializing in medical invoice
 
 Requirements:
 - At the top of each page, there will be a field called FORMAT: The value of this field is either SUMMARY or DETAIL BREAK-UP. Only consider the pages where the value of the FORMAT field is SUMMARY. Simply ignore the other other pages. 
+- In some pages, the value (SUMMARY / DETAIL BREAK-UP) may be absent. In this case, use the following logic. The document will always contain a set of SUMMARY pages followed by a set of DETAIL BREAK-UP pages. If pages 1, 3, 5 contain the value SUMMARY and page 6 contains the value DETAIL BREAK-UP, then pages 1-5 are the SUMMARY pages. In this case, process exactly these pages (1-5). In case pages 2, 3, 4 contain the value SUMMARY and page 5 onwards contain the keyword DETAIL BREAK-UP, then the summary pages are 1-4. In this case, once again, process exactly these pages. 
+- The first page will ALWAYS be a summary page. Be sure to include this in your processing. 
 - Follow the schema keys exactly; include every sub-category key even if empty (use []).
 - When it comes to CONSULTANT(S) FEES, there might be multiple consultants who have attended to the patient. For each consultant, there will be three setions, REPORTING FEES, PROCEDURE FEES and CONSULTATION FEES. Add these up to get the total fee paid to the consultant (see the schema). Details for each consultant must be in the form of a dictionary (See the schema) and together they must be in the form of a list. Be sure not to clump all the charges for different consultants. 
 - For each line item, extract: service_code, description, date, quantity, gross_amount, discount, allocated_amount.
